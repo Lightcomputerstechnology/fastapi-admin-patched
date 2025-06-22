@@ -1,3 +1,4 @@
+
 from setuptools import setup, find_packages
 
 setup(
@@ -11,9 +12,7 @@ setup(
         "jinja2",
         "python-multipart",
         "redis>=4.5.0",
-        "pydantic",
+        "pydantic"
     ],
-    extras_require={
-        "tortoise": ["aerich"],
-    },
+    extras_require={"tortoise": ["aerich"]},
 )
