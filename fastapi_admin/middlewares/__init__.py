@@ -1,1 +1,1 @@
-
+from .language_processor import language_processor
