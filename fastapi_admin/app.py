@@ -1,11 +1,11 @@
-
 from typing import Dict, List, Optional, Type
 
 import redis.asyncio as redis
 from fastapi import FastAPI
 from pydantic import HttpUrl
 from starlette.middleware.base import BaseHTTPMiddleware
-from tortoise import Model
+from tortoise import Model, Tortoise
+from tortoise.exceptions import OperationalError
 
 from fastapi_admin import i18n
 
@@ -16,6 +16,23 @@ from .resources import Model as ModelResource
 from .resources import Resource
 from .routes import router
 
+async def _create_admin_table_if_missing(admin_model_str: str):
+    """
+    Checks if the admin table exists, and creates schemas if missing.
+    Call only during first deploy to avoid cyclic FK headaches permanently.
+    """
+    admin_model = Tortoise.get_model(admin_model_str)
+
+    try:
+        count = await admin_model.all().count()
+        print(f"✅ Admin table exists with {count} records.")
+    except OperationalError as e:
+        print("⚠️ Admin table missing, attempting to create...")
+        try:
+            await Tortoise.generate_schemas()
+            print("✅ Admin table created successfully.")
+        except Exception as ex:
+            print("❌ Failed to create admin table automatically:", ex)
 
 class FastAPIAdmin(FastAPI):
     logo_url: str
@@ -37,6 +54,8 @@ class FastAPIAdmin(FastAPI):
         template_folders: Optional[List[str]] = None,
         providers: Optional[List[Provider]] = None,
         favicon_url: Optional[HttpUrl] = None,
+        admin_model_str: Optional[str] = None,
+        create_admin_table: bool = False,   # 🩹 added flag
     ):
         self.redis = redis
         i18n.set_locale(default_locale)
@@ -47,6 +66,9 @@ class FastAPIAdmin(FastAPI):
         if template_folders:
             template.add_template_folder(*template_folders)
         await self._register_providers(providers)
+
+        if create_admin_table and admin_model_str:
+            await _create_admin_table_if_missing(admin_model_str)
 
     async def _register_providers(self, providers: Optional[List[Provider]] = None):
         for p in providers or []:
@@ -70,7 +92,6 @@ class FastAPIAdmin(FastAPI):
     def get_model_resource(self, model: Type[Model]):
         r = self.model_resources.get(model)
         return r() if r else None
-
 
 app = FastAPIAdmin(
     title="FastAdmin",
